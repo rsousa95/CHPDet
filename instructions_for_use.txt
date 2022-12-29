@@ -1,0 +1,64 @@
+(Translated the original repo to english using google translate)
+
+
+This code is based on CenterNet
+
+Instructions for use:
+Basic usage reference CHPDet/readme/GETTING_STARTED.md
+Instructions for using this code
+1. Hyperlink your dataset to data/coco
+2. Download the trained model and put it in the exp folder
+3. Test reasoning
+   python test.py multi_pose --exp_id dla_USnavy512_RGuass1_12raduis_arf --dataset coco_hp --resume  --debug 2
+
+4. Model training and inference
+4.1.1 centernet-Rbb training:
+python main.py ctdet --exp_id CenR_usnavy512_dla_2x --arch dla_34 --batch_size 26 --master_batch 14--lr 5e-4 --gpus 0,1 --num_workers 8 --num_epochs 230 --lr_step 180,210  --load_model ../exp/multi_pose_dla_3x.pth
+
+4.1.2 centernet-Rbb test:
+python test.py ctdet --exp_id CenR_usnavy512_dla_2x --arch dla_34 --keep_res --resume 
+
+4.2.1 CHP_DLA training:
+python main.py multi_pose --exp_id dla_USnavy512_RGuass1_12raduis_arf --arch dlaarf_34  --dataset coco_hp --batch_size 28  --master_batch 16   --gpus 0,1 --lr 5e-4 --load_model ../exp/ctdet_coco_hg.pth  --num_workers 8 --num_epochs 320 --lr_step 270,300
+
+4.2.2 CHP_DLA test:
+python test.py multi_pose --exp_id dla_USnavy512_RGuass1_12raduis_arf --arch dlaarf_34  --dataset coco_hp --resume  
+
+
+5. Model evaluation
+   After running the test.py test data set, the result file CHPDet/exp/multi_pose/dla_USnavy512_RGuass1_12raduis_arf/results.json will be generated
+   The DOTA_devkit evaluation program will be called here
+   Use /CHPDet/src/Test to get the json result splicing conversion program.py for evaluation
+   The GT files that need to be used are placed in CHPDet/src/GT20_TxT
+   Use /CHPDet/src/Test/Rotatexml to convert to DotaTxT for evaluation.py Convert the xml file to the standard DOTA format. 
+   Put the generated txt file into CHPDet/src/GT20_TxT
+
+5. If you need to train your own data set
+5.1. Change settings
+    Enter CHPDet/src/lib/datasets/dataset/coco_hp.py
+    change
+    	num_classes=16
+        default_resolution = [1024, 1024]
+    for your own data category and training resolution
+    
+    Change opt.py line 345
+    	'multi_pose': {'default_resolution': [1024, 1024], 'num_classes': 1,}
+
+5.2 Label data, use labelimg2 software to label and visualize data sets
+
+5.3 Data Augmentation and Renaming. After expanding the data as needed, use /CHPDet/src/2 to rename the expanded image and xml file name.py
+    rename the file
+
+5.4 Generate annotation files. Use /CHPDet/src/3 to rotate the rectangle annotation to generate keypointjson file.py
+     Generate a dataset in coco format
+
+5.5 Use CHPDet/src/4 to visualize json to generate a single json.py
+	Check that the generated data format is correct
+5.6 Move the dataset to the /CHPDet/data/ folder and change the folder name to coco or hyperlink the directory to /CHPDet/data/coco
+   ln -s source folder /CHPDet/data/coco
+
+Relevant details:
+1. It can be visualized by setting --debug 0 in opt.py or typing in the command line
+2. At present, my experiment is to add the ORN module to the DLA34 network. If it is not needed, use the ORN module.
+Then backup CHPDet/src/lib/models/networks/pose_dla_dcn.py
+For example, rename CHPDet/src/lib/models/networks/pose_dla_dcn_without_ORN.py to pose_dla_dcn.py
