@@ -13,8 +13,9 @@ from torch import nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
-from .DCNv2.dcn_v2 import DCN
-from .orn import ORConv2d, RotationInvariantPooling,RotationInvariantEncoding
+from torchvision.ops.deform_conv import DeformConv2d
+from orn import ORConv2d, ORPool1d
+
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
@@ -343,16 +344,29 @@ def fill_up_weights(up):
 
 
 class DeformConv(nn.Module):
-    def __init__(self, chi, cho):
+    def __init__(self, in_channels, out_channels):
         super(DeformConv, self).__init__()
         self.actf = nn.Sequential(
-            nn.BatchNorm2d(cho, momentum=BN_MOMENTUM),
+            nn.BatchNorm2d(out_channels, momentum=BN_MOMENTUM),
             nn.ReLU(inplace=True)
         )
-        self.conv = DCN(chi, cho, kernel_size=(3,3), stride=1, padding=1, dilation=1, deformable_groups=1)
+        kernel_size=(3, 3) 
+        stride, padding, dilation, groups = 1, 1, 1, 1 
+        channels_ = groups * 3 * kernel_size[0] * kernel_size[1]
+        
+        self.conv_offset_mask = nn.Conv2d(in_channels, channels_, kernel_size=kernel_size, stride=stride, padding=padding, bias=True)
+        self.conv_offset_mask.weight.data.zero_()
+        self.conv_offset_mask.bias.data.zero_()
+        
+        self.conv = DeformConv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, groups=groups)
 
     def forward(self, x):
-        x = self.conv(x)
+        out = self.conv_offset_mask(x)
+        o1, o2, mask = torch.chunk(out, 3, dim=1)
+        offset = torch.cat((o1, o2), dim=1)
+        mask = torch.sigmoid(mask)
+        
+        x = self.conv(x, offset, mask)
         x = self.actf(x)
         return x
 
@@ -441,7 +455,8 @@ class DLASeg(nn.Module):
                 self.feat_channels ), kernel_size=3, padding=1, arf_config=(1, 8))
         # self.or_conv = ORConv2d(self.feat_channels, int(
         #         self.feat_channels / 8), kernel_size=3, padding=1, arf_config=(1, 8))
-        self.or_pool = RotationInvariantPooling(256, 8)#RotationInvariantEncoding
+        # self.or_pool = RotationInvariantPooling(256, 8)#RotationInvariantEncoding
+        self.or_pool = ORPool1d(num_orientation=8)
         
         if out_channel == 0:
             out_channel = channels[self.first_level]
